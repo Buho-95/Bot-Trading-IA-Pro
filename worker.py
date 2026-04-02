@@ -105,6 +105,9 @@ class TradingWorker:
             # Train model (if needed)
             model, predictions, df_ml, X_test, X_train, y_train, y_test = self.bot.train_model(df, symbol)
 
+            import gc
+            gc.collect()
+
             if model is None:
                 self.logger.warning(f"Could not train model for {symbol} due to insufficient data")
                 return

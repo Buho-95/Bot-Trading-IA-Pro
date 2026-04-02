@@ -121,7 +121,10 @@ auto_save = st.sidebar.checkbox(
 
 # Refresh button
 if st.sidebar.button("🔄 Actualizar Datos", type="primary"):
+    import gc
     st.cache_data.clear()
+    st.cache_resource.clear()
+    gc.collect()
     st.rerun()
 
 # Load and process data
@@ -132,8 +135,11 @@ with st.spinner("🔄 Descargando datos y ejecutando análisis IA..."):
         df = bot.calculate_indicators(df)
         
         # Train model and get predictions
-        with st.spinner("🤖 Entrenando modelo de IA..."):
+        with st.spinner("🤖 Entrenando modelo de IA (Memoria Optimizada)..."):
             model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df, simbolo)
+            
+            import gc
+            gc.collect()
             
         if model is not None:
             capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
