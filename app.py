@@ -182,209 +182,208 @@ else:
 
 # Dashboard Page
 if page == "Dashboard":
-    if df.empty:
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    if df.empty or 'app_data' not in st.session_state:
         st.info("👆 Presiona '🚀 Sincronizar e Inteligencia IA' en el menú lateral para iniciar.")
     else:
-        # Key Metrics with enhanced styling
-        col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        current_price = float(df['close'].iloc[-1])
-        price_change = float(df['close'].pct_change().iloc[-1] * 100) if len(df) > 1 else 0
-        st.metric(
-            label="💰 Precio Actual",
-            value=f"${current_price:,.2f}",
-            delta=f"{price_change:+.2f}%",
-            delta_color="normal" if price_change >= 0 else "inverse"
-        )
-    
-    with col2:
-        bot_capital = float(capital_bot.iloc[-1]) if not capital_bot.empty else 1000
-        bot_return = ((bot_capital - 1000) / 1000) * 100
-        st.metric(
-            label="🤖 Capital Bot IA",
-            value=f"${bot_capital:,.2f}",
-            delta=f"{bot_return:+.2f}%",
-            delta_color="normal" if bot_return >= 0 else "inverse"
-        )
-    
-    with col3:
-        market_capital = float(capital_holding.iloc[-1]) if not capital_holding.empty else 1000
-        market_return = ((market_capital - 1000) / 1000) * 100
-        st.metric(
-            label="📈 Capital Mercado",
-            value=f"${market_capital:,.2f}",
-            delta=f"{market_return:+.2f}%",
-            delta_color="normal" if market_return >= 0 else "inverse"
-        )
-    
-    with col4:
-        current_signal = predictions[-1] if len(predictions) > 0 else 0
-        signal_text = "🟢 COMPRAR" if current_signal == 1 else "🔴 VENDER"
-        signal_class = "signal-buy" if current_signal == 1 else "signal-sell"
-        st.markdown(f"<div class='{signal_class}'>{signal_text}</div>", unsafe_allow_html=True)
-    
-    with col5:
-        # Fear & Greed Index
-        fear_greed_value = int(df['fear_greed_index'].iloc[-1]) if 'fear_greed_index' in df.columns else 50
-        fear_greed_text = get_fear_greed_emoji(fear_greed_value)
-        fear_greed_color = get_fear_greed_color(fear_greed_value)
-        st.markdown(f"<div style='background: linear-gradient(135deg, {fear_greed_color} 0%, #666 100%); color: white; padding: 1rem; border-radius: 8px; text-align: center; font-weight: bold;'>🧠 {fear_greed_text}</div>", unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # Performance Chart
-    st.subheader("📊 Comparativa de Estrategias")
-    if not capital_bot.empty and not capital_holding.empty:
-        dates = df_ml.loc[X_test.index, 'date']
-        perf_fig = create_performance_chart(capital_bot, capital_holding, dates)
-        st.plotly_chart(perf_fig, use_container_width=True)
-    
-    # Stop Loss Information
-    if stop_loss_data and stop_loss_data.get('stop_loss') is not None:
-        st.subheader("🛡️ Trailing Stop Loss Dinámico")
-        col1, col2, col3, col4 = st.columns(4)
-        
         with col1:
-            st.metric("Stop Loss", f"${stop_loss_data['stop_loss']:,.2f}")
+            current_price = float(df['close'].iloc[-1])
+            price_change = float(df['close'].pct_change().iloc[-1] * 100) if len(df) > 1 else 0
+            st.metric(
+                label="💰 Precio Actual",
+                value=f"${current_price:,.2f}",
+                delta=f"{price_change:+.2f}%",
+                delta_color="normal" if price_change >= 0 else "inverse"
+            )
         
         with col2:
-            st.metric("Take Profit", f"${stop_loss_data['take_profit']:,.2f}")
+            bot_capital = float(capital_bot.iloc[-1]) if not capital_bot.empty else 1000
+            bot_return = ((bot_capital - 1000) / 1000) * 100
+            st.metric(
+                label="🤖 Capital Bot IA",
+                value=f"${bot_capital:,.2f}",
+                delta=f"{bot_return:+.2f}%",
+                delta_color="normal" if bot_return >= 0 else "inverse"
+            )
         
         with col3:
-            st.metric("ATR Actual", f"{stop_loss_data['atr']:.4f}")
+            market_capital = float(capital_holding.iloc[-1]) if not capital_holding.empty else 1000
+            market_return = ((market_capital - 1000) / 1000) * 100
+            st.metric(
+                label="📈 Capital Mercado",
+                value=f"${market_capital:,.2f}",
+                delta=f"{market_return:+.2f}%",
+                delta_color="normal" if market_return >= 0 else "inverse"
+            )
         
         with col4:
-            st.metric("ATR %", f"{stop_loss_data['atr_percentage']:.2f}%")
-    
-    # Technical Indicators
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("💹 Indicadores Técnicos")
+            current_signal = predictions[-1] if len(predictions) > 0 else 0
+            signal_text = "🟢 COMPRAR" if current_signal == 1 else "🔴 VENDER"
+            signal_class = "signal-buy" if current_signal == 1 else "signal-sell"
+            st.markdown(f"<div class='{signal_class}'>{signal_text}</div>", unsafe_allow_html=True)
         
-        # RSI
-        rsi_value = df['rsi_14'].iloc[-1] if 'rsi_14' in df.columns else 0
-        st.metric("RSI (14)", f"{rsi_value:.2f}", delta=None)
+        with col5:
+            # Fear & Greed Index
+            fear_greed_value = int(df['fear_greed_index'].iloc[-1]) if 'fear_greed_index' in df.columns else 50
+            fear_greed_text = get_fear_greed_emoji(fear_greed_value)
+            fear_greed_color = get_fear_greed_color(fear_greed_value)
+            st.markdown(f"<div style='background: linear-gradient(135deg, {fear_greed_color} 0%, #666 100%); color: white; padding: 1rem; border-radius: 8px; text-align: center; font-weight: bold;'>🧠 {fear_greed_text}</div>", unsafe_allow_html=True)
         
-        # Moving Averages
-        if 'sma_20' in df.columns and 'sma_50' in df.columns:
-            sma_20 = df['sma_20'].iloc[-1]
-            sma_50 = df['sma_50'].iloc[-1]
-            st.metric("SMA 20", f"${sma_20:,.2f}")
-            st.metric("SMA 50", f"${sma_50:,.2f}")
+        st.divider()
         
-        # Volatility
-        if 'volatilidad' in df.columns:
-            volatility = df['volatilidad'].iloc[-1]
-            st.metric("Volatilidad", f"{volatility:.4f}")
+        # Performance Chart
+        st.subheader("📊 Comparativa de Estrategias")
+        if not capital_bot.empty and not capital_holding.empty:
+            dates = df_ml.loc[X_test.index, 'date']
+            perf_fig = create_performance_chart(capital_bot, capital_holding, dates)
+            st.plotly_chart(perf_fig, use_container_width=True)
         
-        # ATR
-        if 'atr' in df.columns:
-            atr_value = df['atr'].iloc[-1]
-            st.metric("ATR (14)", f"{atr_value:.4f}")
-    
-    with col2:
-        st.subheader("📈 Estadísticas del Modelo")
-        
-        if len(predictions) > 0:
-            accuracy = (predictions == y_test).mean() * 100
-            win_rate = np.mean(predictions) * 100
-            total_signals = len(predictions)
-            buy_signals = np.sum(predictions)
+        # Stop Loss Information
+        if stop_loss_data and stop_loss_data.get('stop_loss') is not None:
+            st.subheader("🛡️ Trailing Stop Loss Dinámico")
+            col_sl1, col_sl2, col_sl3, col_sl4 = st.columns(4)
             
-            st.metric("Precisión del Modelo", f"{accuracy:.1f}%")
-            st.metric("Tasa de Compra", f"{win_rate:.1f}%")
-            st.metric("Señales Totales", total_signals)
-            st.metric("Señales de Compra", buy_signals)
+            with col_sl1:
+                st.metric("Stop Loss", f"${stop_loss_data['stop_loss']:,.2f}")
+            
+            with col_sl2:
+                st.metric("Take Profit", f"${stop_loss_data['take_profit']:,.2f}")
+            
+            with col_sl3:
+                st.metric("ATR Actual", f"{stop_loss_data['atr']:.4f}")
+            
+            with col_sl4:
+                st.metric("ATR %", f"{stop_loss_data['atr_percentage']:.2f}%")
+    
+        # Technical Indicators
+        col_ti1, col_ti2 = st.columns(2)
         
-        # Model parameters if available
-        if hasattr(bot, 'best_params') and bot.best_params:
-            st.subheader("⚙️ Parámetros Optimizados")
-            st.json(bot.best_params)
+        with col_ti1:
+            st.subheader("💹 Indicadores Técnicos")
+            
+            # RSI
+            rsi_value = df['rsi_14'].iloc[-1] if 'rsi_14' in df.columns else 0
+            st.metric("RSI (14)", f"{rsi_value:.2f}", delta=None)
+            
+            # Moving Averages
+            if 'sma_20' in df.columns and 'sma_50' in df.columns:
+                sma_20 = df['sma_20'].iloc[-1]
+                sma_50 = df['sma_50'].iloc[-1]
+                st.metric("SMA 20", f"${sma_20:,.2f}")
+                st.metric("SMA 50", f"${sma_50:,.2f}")
+            
+            # Volatility
+            if 'volatilidad' in df.columns:
+                volatility = df['volatilidad'].iloc[-1]
+                st.metric("Volatilidad", f"{volatility:.4f}")
+            
+            # ATR
+            if 'atr' in df.columns:
+                atr_value = df['atr'].iloc[-1]
+                st.metric("ATR (14)", f"{atr_value:.4f}")
         
-        # Fear & Greed Index
-        if 'fear_greed_index' in df.columns:
-            fear_greed_value = int(df['fear_greed_index'].iloc[-1])
-            st.subheader("🧠 Fear & Greed Index")
-            fear_greed_fig = create_fear_greed_gauge(fear_greed_value)
-            st.plotly_chart(fear_greed_fig, use_container_width=True)
+        with col_ti2:
+            st.subheader("📈 Estadísticas del Modelo")
+            
+            if len(predictions) > 0:
+                accuracy = (predictions == y_test).mean() * 100
+                win_rate = np.mean(predictions) * 100
+                total_signals = len(predictions)
+                buy_signals = np.sum(predictions)
+                
+                st.metric("Precisión del Modelo", f"{accuracy:.1f}%")
+                st.metric("Tasa de Compra", f"{win_rate:.1f}%")
+                st.metric("Señales Totales", total_signals)
+                st.metric("Señales de Compra", buy_signals)
+            
+            # Model parameters if available
+            if hasattr(bot, 'best_params') and bot.best_params:
+                st.subheader("⚙️ Parámetros Optimizados")
+                st.json(bot.best_params)
+            
+            # Fear & Greed Index
+            if 'fear_greed_index' in df.columns:
+                fear_greed_value = int(df['fear_greed_index'].iloc[-1])
+                st.subheader("🧠 Fear & Greed Index")
+                fear_greed_fig = create_fear_greed_gauge(fear_greed_value)
+                st.plotly_chart(fear_greed_fig, use_container_width=True)
 
 # Technical Analysis Page
 elif page == "Análisis Técnico":
-    if df.empty:
+    if df.empty or 'app_data' not in st.session_state:
         st.info("👆 Presiona '🚀 Sincronizar e Inteligencia IA' en el menú lateral para iniciar.")
     else:
         st.subheader("📈 Análisis Técnico Avanzado")
-    
-    # Price Chart
-    st.subheader("📊 Gráfico de Precios")
-    price_fig = create_price_chart(df, capital_bot, capital_holding, simbolo)
-    st.plotly_chart(price_fig, use_container_width=True)
-    
-    # RSI Chart
-    st.subheader("📉 Indicador RSI")
-    rsi_fig = create_rsi_chart(df)
-    st.plotly_chart(rsi_fig, use_container_width=True)
-    
-    # ATR Chart
-    st.subheader("📏 Indicador ATR")
-    atr_fig = create_atr_chart(df)
-    st.plotly_chart(atr_fig, use_container_width=True)
-    
-    # Fear & Greed Gauge
-    st.subheader("🧠 Fear & Greed Index")
-    if 'fear_greed_index' in df.columns:
-        fear_greed_value = int(df['fear_greed_index'].iloc[-1])
-        fear_greed_fig = create_fear_greed_gauge(fear_greed_value)
-        st.plotly_chart(fear_greed_fig, use_container_width=True)
-    
-    # Technical Analysis Summary
-    st.subheader("📋 Resumen de Análisis")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("**Tendencia:**")
-        if 'sma_20' in df.columns and 'sma_50' in df.columns:
-            current_price = df['close'].iloc[-1]
-            sma_20 = df['sma_20'].iloc[-1]
-            sma_50 = df['sma_50'].iloc[-1]
-            
-            if current_price > sma_20 > sma_50:
-                st.success("🔥 Fuerte Alcista")
-            elif current_price < sma_20 < sma_50:
-                st.error("❄️ Fuerte Bajista")
-            else:
-                st.warning("⚖️ Lateral")
-    
-    with col2:
-        st.markdown("**Momentum:**")
-        rsi_value = df['rsi_14'].iloc[-1] if 'rsi_14' in df.columns else 50
-        if rsi_value > 70:
-            st.error("🔴 Sobrecompra")
-        elif rsi_value < 30:
-            st.success("🟢 Sobreventa")
-        else:
-            st.info("🟡 Neutral")
-    
-    with col3:
-        st.markdown("**Volatilidad:**")
-        if 'volatilidad' in df.columns:
-            volatility = df['volatilidad'].iloc[-1]
-            if volatility > df['volatilidad'].quantile(0.75):
-                st.error("🌪️ Alta Volatilidad")
-            elif volatility < df['volatilidad'].quantile(0.25):
-                st.success("😌 Baja Volatilidad")
-            else:
-                st.info("⚖️ Volatilidad Normal")
-    
-    with col4:
-        st.markdown("**Sentimiento Mercado:**")
+        
+        # Price Chart
+        st.subheader("📊 Gráfico de Precios")
+        price_fig = create_price_chart(df, capital_bot, capital_holding, simbolo)
+        st.plotly_chart(price_fig, use_container_width=True)
+        
+        # RSI Chart
+        st.subheader("📉 Indicador RSI")
+        rsi_fig = create_rsi_chart(df)
+        st.plotly_chart(rsi_fig, use_container_width=True)
+        
+        # ATR Chart
+        st.subheader("📏 Indicador ATR")
+        atr_fig = create_atr_chart(df)
+        st.plotly_chart(atr_fig, use_container_width=True)
+        
+        # Fear & Greed Gauge
+        st.subheader("🧠 Fear & Greed Index")
         if 'fear_greed_index' in df.columns:
             fear_greed_value = int(df['fear_greed_index'].iloc[-1])
-            fear_greed_emoji = get_fear_greed_emoji(fear_greed_value)
-            st.markdown(f"{fear_greed_emoji}")
+            fear_greed_fig = create_fear_greed_gauge(fear_greed_value)
+            st.plotly_chart(fear_greed_fig, use_container_width=True)
+        
+        # Technical Analysis Summary
+        st.subheader("📋 Resumen de Análisis")
+        
+        col_ta1, col_ta2, col_ta3, col_ta4 = st.columns(4)
+        
+        with col_ta1:
+            st.markdown("**Tendencia:**")
+            if 'sma_20' in df.columns and 'sma_50' in df.columns:
+                current_price = df['close'].iloc[-1]
+                sma_20 = df['sma_20'].iloc[-1]
+                sma_50 = df['sma_50'].iloc[-1]
+                
+                if current_price > sma_20 > sma_50:
+                    st.success("🔥 Fuerte Alcista")
+                elif current_price < sma_20 < sma_50:
+                    st.error("❄️ Fuerte Bajista")
+                else:
+                    st.warning("⚖️ Lateral")
+        
+        with col_ta2:
+            st.markdown("**Momentum:**")
+            rsi_value = df['rsi_14'].iloc[-1] if 'rsi_14' in df.columns else 50
+            if rsi_value > 70:
+                st.error("🔴 Sobrecompra")
+            elif rsi_value < 30:
+                st.success("🟢 Sobreventa")
+            else:
+                st.info("🟡 Neutral")
+        
+        with col_ta3:
+            st.markdown("**Volatilidad:**")
+            if 'volatilidad' in df.columns:
+                volatility = df['volatilidad'].iloc[-1]
+                if volatility > df['volatilidad'].quantile(0.75):
+                    st.error("🌪️ Alta Volatilidad")
+                elif volatility < df['volatilidad'].quantile(0.25):
+                    st.success("😌 Baja Volatilidad")
+                else:
+                    st.info("⚖️ Volatilidad Normal")
+        
+        with col_ta4:
+            st.markdown("**Sentimiento Mercado:**")
+            if 'fear_greed_index' in df.columns:
+                fear_greed_value = int(df['fear_greed_index'].iloc[-1])
+                fear_greed_emoji = get_fear_greed_emoji(fear_greed_value)
+                st.markdown(f"{fear_greed_emoji}")
 
 # History Page
 elif page == "Análisis de Correlación":
