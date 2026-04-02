@@ -92,7 +92,7 @@ class TradingWorker:
             logger.info(f"📊 Processing {symbol}...")
             
             # Get market data
-            days = int(self.config.get_setting('default_days', '30'))
+            days = int(self.config.get_setting('default_days', '7'))
             df = self.bot.get_market_data(symbol, days)
             
             if df.empty:
@@ -109,7 +109,26 @@ class TradingWorker:
             gc.collect()
 
             if model is None:
-                self.logger.warning(f"Could not train model for {symbol} due to insufficient data")
+                logger.warning(f"⚠️ Model not trained for {symbol}. Sending basic fallback notification.")
+                # Basic notification even if training fails
+                current_price = float(df['close'].iloc[-1]) if not df.empty else 0.0
+                decision = {
+                    'timestamp': datetime.now(),
+                    'symbol': symbol,
+                    'signal': 'ESPERAR (Modelo No Disponible)',
+                    'price': current_price,
+                    'confidence': 0.0,
+                    'kelly_fraction': 0.01,
+                    'suggested_investment': 100,
+                    'stop_loss': current_price * 0.98,
+                    'take_profit': current_price * 1.02,
+                    'atr': float(df['atr'].iloc[-1]) if 'atr' in df.columns and not df.empty else 0.0,
+                    'fear_greed_index': int(df['fear_greed_index'].iloc[-1]) if 'fear_greed_index' in df.columns and not df.empty else 50,
+                    'model_accuracy': 0.0,
+                    'strategy': 'Basic Indicators (Fallback)'
+                }
+                self.save_trading_decision(decision)
+                self.telegram.send_trading_signal(decision)
                 return
             
             # Simulate trading
@@ -150,7 +169,7 @@ class TradingWorker:
                     'atr': stop_loss_data.get('atr'),
                     'fear_greed_index': int(df['fear_greed_index'].iloc[-1]) if 'fear_greed_index' in df.columns else 50,
                     'model_accuracy': accuracy,
-                    'strategy': 'RandomForest + GridSearchCV'
+                    'strategy': 'RandomForest + RandomizedSearchCV (Optimizado)'
                 }
                 
                 # Save decision to database

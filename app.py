@@ -119,48 +119,74 @@ auto_save = st.sidebar.checkbox(
     value=config.get_setting('auto_save') == 'true'
 )
 
-# Refresh button
-if st.sidebar.button("🔄 Actualizar Datos", type="primary"):
+# Refresh button (Clear Memory)
+if st.sidebar.button("🧹 Limpiar Caché y Reiniciar", type="secondary"):
     import gc
     st.cache_data.clear()
     st.cache_resource.clear()
+    if 'app_data' in st.session_state:
+        del st.session_state['app_data']
     gc.collect()
     st.rerun()
 
+# Botón Principal
+iniciar_entrenamiento = st.sidebar.button("🚀 Sincronizar e Inteligencia IA", type="primary")
+
 # Load and process data
-with st.spinner("🔄 Descargando datos y ejecutando análisis IA..."):
-    df = bot.get_market_data(simbolo, dias_historial)
-    
-    if not df.empty:
-        df = bot.calculate_indicators(df)
+if iniciar_entrenamiento:
+    with st.spinner("🔄 Descargando datos y ejecutando análisis IA..."):
+        df = bot.get_market_data(simbolo, dias_historial)
         
-        # Train model and get predictions
-        with st.spinner("🤖 Entrenando modelo de IA (Memoria Optimizada)..."):
-            model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df, simbolo)
+        if not df.empty:
+            df = bot.calculate_indicators(df)
             
-            import gc
-            gc.collect()
-            
-        if model is not None:
-            capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
-            
-            # Save data if auto-save is enabled
-            if auto_save:
-                bot.save_session_data(simbolo, df, capital_bot, capital_holding, predictions)
-            
-            st.session_state.last_update = datetime.now()
+            # Train model and get predictions
+            with st.spinner("🤖 Entrenando modelo de IA (Memoria Optimizada)..."):
+                model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df, simbolo)
+                
+                import gc
+                gc.collect()
+                
+            if model is not None:
+                capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
+                
+                # Save data if auto-save is enabled
+                if auto_save:
+                    bot.save_session_data(simbolo, df, capital_bot, capital_holding, predictions)
+                
+                st.session_state.last_update = datetime.now()
+                st.session_state.app_data = {
+                    'df': df, 'model': model, 'predictions': predictions, 'df_ml': df_ml,
+                    'X_test': X_test, 'X_train': X_train, 'y_train': y_train, 'y_test': y_test,
+                    'capital_bot': capital_bot, 'capital_holding': capital_holding, 'stop_loss_data': stop_loss_data
+                }
+            else:
+                st.warning("⚠️ Datos insuficientes o modelo no disponible.")
         else:
-            capital_bot = pd.Series()
-            capital_holding = pd.Series()
-            st.warning("⚠️ Datos insuficientes o modelo no disponible.")
-    else:
-        st.error("No se pudieron obtener los datos del mercado. Por favor, intenta con otro símbolo.")
-        st.stop()
+            st.error("No se pudieron obtener los datos del mercado. Por favor, intenta con otro símbolo.")
+            st.stop()
+
+# Restore from session state
+if 'app_data' in st.session_state:
+    ad = st.session_state.app_data
+    df, model, predictions, df_ml = ad['df'], ad['model'], ad['predictions'], ad['df_ml']
+    X_test, X_train, y_train, y_test = ad['X_test'], ad['X_train'], ad['y_train'], ad['y_test']
+    capital_bot, capital_holding, stop_loss_data = ad['capital_bot'], ad['capital_holding'], ad['stop_loss_data']
+else:
+    df = pd.DataFrame()
+    model = None
+    predictions = []
+    capital_bot = pd.Series()
+    capital_holding = pd.Series()
+    stop_loss_data = {}
 
 # Dashboard Page
 if page == "Dashboard":
-    # Key Metrics with enhanced styling
-    col1, col2, col3, col4, col5 = st.columns(5)
+    if df.empty:
+        st.info("👆 Presiona '🚀 Sincronizar e Inteligencia IA' en el menú lateral para iniciar.")
+    else:
+        # Key Metrics with enhanced styling
+        col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         current_price = float(df['close'].iloc[-1])
@@ -286,7 +312,10 @@ if page == "Dashboard":
 
 # Technical Analysis Page
 elif page == "Análisis Técnico":
-    st.subheader("📈 Análisis Técnico Avanzado")
+    if df.empty:
+        st.info("👆 Presiona '🚀 Sincronizar e Inteligencia IA' en el menú lateral para iniciar.")
+    else:
+        st.subheader("📈 Análisis Técnico Avanzado")
     
     # Price Chart
     st.subheader("📊 Gráfico de Precios")

@@ -71,8 +71,8 @@ def _cached_train_model(X_train: pd.DataFrame, y_train: pd.Series, param_grid: d
     search = RandomizedSearchCV(
         estimator=rf,
         param_distributions=param_grid,
-        n_iter=10,
-        cv=5,
+        n_iter=5,
+        cv=3,
         n_jobs=None,
         scoring='accuracy',
         random_state=42,
@@ -361,7 +361,7 @@ class TradingBot:
             # Try to get ETH and S&P 500 data for correlation
             try:
                 # Download ETH data
-                eth_df = self.get_market_data('ETH-USD', 30)
+                eth_df = self.get_market_data('ETH-USD', 7)
                 if not eth_df.empty:
                     eth_df = eth_df.copy()
                     eth_df['eth_return'] = eth_df['close'].pct_change()
@@ -373,7 +373,7 @@ class TradingBot:
                     df['eth_return'] = df['eth_return'].ffill()
                 
                 # Download S&P 500 data
-                sp500_df = self.get_market_data('^GSPC', 30)
+                sp500_df = self.get_market_data('^GSPC', 7)
                 if not sp500_df.empty:
                     sp500_df = sp500_df.copy()
                     sp500_df['sp500_return'] = sp500_df['close'].pct_change()
@@ -552,7 +552,7 @@ class TradingBot:
                 'atr_value': df['atr'].iloc[-1] if 'atr' in df.columns and not df.empty else None,
                 'fear_greed_index': df['fear_greed_index'].iloc[-1] if 'fear_greed_index' in df.columns and not df.empty else None,
                 'prediction_confidence': 0.85,  # Default confidence
-                'strategy_used': 'RandomForest + GridSearchCV'
+                'strategy_used': 'RandomForest + RandomizedSearchCV (Optimizado)'
             }
             
             # Send Telegram notification for new signal
