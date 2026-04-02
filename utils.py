@@ -59,6 +59,46 @@ def obtener_datos_multiactivo(symbols: List[str], dias: int) -> Dict[str, pd.Dat
     
     return data_dict
 
+@st.cache_resource(ttl=3600, show_spinner=False)
+def _cached_train_model(X_train: pd.DataFrame, y_train: pd.Series, param_grid: dict) -> Tuple[object, dict]:
+    """Train the model with caching, using RandomizedSearchCV and a 30s timeout fallback"""
+    import concurrent.futures
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import RandomizedSearchCV
+    
+    rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+    
+    search = RandomizedSearchCV(
+        estimator=rf,
+        param_distributions=param_grid,
+        n_iter=10,
+        cv=5,
+        n_jobs=-1,
+        scoring='accuracy',
+        random_state=42,
+        verbose=0
+    )
+    
+    def _do_train():
+        search.fit(X_train, y_train)
+        return search.best_estimator_, search.best_params_
+        
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(_do_train)
+            best_model, best_params = future.result(timeout=30)
+            return best_model, best_params
+    except concurrent.futures.TimeoutError:
+        st.warning("⏱️ El entrenamiento optimizado superó los 30 segundos. Usando parámetros por defecto para no bloquear la app.")
+        default_rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+        default_rf.fit(X_train, y_train)
+        return default_rf, "Parámetros Por Defecto (Timeout Previsto)"
+    except Exception as e:
+        st.error(f"❌ Error durante el entrenamiento: {e}")
+        default_rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+        default_rf.fit(X_train, y_train)
+        return default_rf, f"Parámetros Por Defecto (Recuperado de Error)"
+
 class TradingBot:
     def __init__(self, db: TradingDatabase):
         self.db = db
@@ -395,9 +435,9 @@ class TradingBot:
 
 
     def train_model(self, df: pd.DataFrame, symbol: str = 'BTC-USD') -> Tuple[object, np.ndarray, pd.DataFrame]:
-        """Train Random Forest model with GridSearchCV optimization for enhanced features"""
+        """Train Random Forest model with RandomizedSearchCV optimization (cached) for enhanced features"""
         from sklearn.ensemble import RandomForestClassifier
-        from sklearn.model_selection import train_test_split, GridSearchCV
+        from sklearn.model_selection import train_test_split
         from sklearn.metrics import accuracy_score, classification_report
         
         # Prepare target variable
@@ -418,34 +458,18 @@ class TradingBot:
         
         # Enhanced parameter grid for multi-asset analysis
         param_grid = {
-            'n_estimators': [100, 200, 300],  # More trees for complex patterns
-            'max_depth': [10, 15, 20, None],  # Deeper trees
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['sqrt', 'log2', 0.7, None],  # Include float for percentage
-            'bootstrap': [True, False],  # Bootstrap sampling
-            'class_weight': ['balanced', None]  # Handle class imbalance
+            'n_estimators': [100, 200],  # Reduced max trees for speed
+            'max_depth': [10, 15, None],  
+            'min_samples_split': [2, 5],
+            'min_samples_leaf': [1, 2],
+            'max_features': ['sqrt', 'log2'], 
+            'bootstrap': [True, False],  
+            'class_weight': ['balanced', None]  
         }
         
-        # Create base model
-        rf = RandomForestClassifier(random_state=42, n_jobs=-1)
-        
-        # Perform GridSearchCV with enhanced configuration
-        with st.spinner('🔍 Optimizando parámetros del modelo con GridSearchCV para análisis multi-activo...'):
-            grid_search = GridSearchCV(
-                estimator=rf,
-                param_grid=param_grid,
-                cv=5,  # Increased cross-validation folds
-                n_jobs=-1,
-                scoring='accuracy',
-                verbose=0
-            )
-            
-            grid_search.fit(X_train, y_train)
-            
-            # Get best model and parameters
-            self.model = grid_search.best_estimator_
-            self.best_params = grid_search.best_params_
+        with st.spinner('🔍 Optimizando parámetros del modelo (con caché)...'):
+            # Call our cached, optimized, timeout-safe training routine
+            self.model, self.best_params = _cached_train_model(X_train, y_train, param_grid)
             
             # Make predictions
             predictions = self.model.predict(X_test)
