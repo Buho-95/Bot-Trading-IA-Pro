@@ -362,7 +362,7 @@ class TradingBot:
             try:
                 # Normalize base date
                 if 'date' in df.columns:
-                    df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
+                    df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None).dt.floor('h')
                 print(f"\n[Caja Negra] Filas BTC (Base) antes de unir: {len(df)}")
                 
                 # Download ETH data
@@ -370,7 +370,7 @@ class TradingBot:
                 if not eth_df.empty:
                     eth_df = eth_df.copy()
                     if 'date' in eth_df.columns:
-                        eth_df['date'] = pd.to_datetime(eth_df['date']).dt.tz_localize(None)
+                        eth_df['date'] = pd.to_datetime(eth_df['date']).dt.tz_localize(None).dt.floor('h')
                     print(f"[Caja Negra] Filas ETH descargadas exitosamente: {len(eth_df)}")
                     eth_df['eth_return'] = eth_df['close'].pct_change()
                     
@@ -384,7 +384,7 @@ class TradingBot:
                 if not sp500_df.empty:
                     sp500_df = sp500_df.copy()
                     if 'date' in sp500_df.columns:
-                        sp500_df['date'] = pd.to_datetime(sp500_df['date']).dt.tz_localize(None)
+                        sp500_df['date'] = pd.to_datetime(sp500_df['date']).dt.tz_localize(None).dt.floor('h')
                     print(f"[Caja Negra] Filas S&P 500 descargadas exitosamente: {len(sp500_df)}")
                     
                     sp500_df['sp500_return'] = sp500_df['close'].pct_change()
