@@ -369,7 +369,7 @@ class TradingBot:
                     # Align by date
                     eth_df = eth_df[['date', 'close', 'eth_return']].rename(columns={'close': 'eth_close'})
                     df = pd.merge(df, eth_df, on='date', how='left')
-                    df = df.fillna(method='ffill')
+                    df = df.ffill()
                 
                 # Download S&P 500 data
                 sp500_df = self.get_market_data('^GSPC', 30)
