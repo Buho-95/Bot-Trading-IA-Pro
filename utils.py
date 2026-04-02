@@ -360,10 +360,18 @@ class TradingBot:
         if symbol == 'BTC-USD':
             # Try to get ETH and S&P 500 data for correlation
             try:
+                # Normalize base date
+                if 'date' in df.columns:
+                    df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
+                print(f"\n[Caja Negra] Filas BTC (Base) antes de unir: {len(df)}")
+                
                 # Download ETH data
                 eth_df = self.get_market_data('ETH-USD', 30)
                 if not eth_df.empty:
                     eth_df = eth_df.copy()
+                    if 'date' in eth_df.columns:
+                        eth_df['date'] = pd.to_datetime(eth_df['date']).dt.tz_localize(None)
+                    print(f"[Caja Negra] Filas ETH descargadas exitosamente: {len(eth_df)}")
                     eth_df['eth_return'] = eth_df['close'].pct_change()
                     
                     # Align by date
@@ -375,12 +383,18 @@ class TradingBot:
                 sp500_df = self.get_market_data('^GSPC', 30)
                 if not sp500_df.empty:
                     sp500_df = sp500_df.copy()
+                    if 'date' in sp500_df.columns:
+                        sp500_df['date'] = pd.to_datetime(sp500_df['date']).dt.tz_localize(None)
+                    print(f"[Caja Negra] Filas S&P 500 descargadas exitosamente: {len(sp500_df)}")
+                    
                     sp500_df['sp500_return'] = sp500_df['close'].pct_change()
                     
                     # Align by date
                     sp500_df = sp500_df[['date', 'close', 'sp500_return']].rename(columns={'close': 'sp500_close'})
                     df = pd.merge(df, sp500_df, on='date', how='left')
                     df = df.ffill()
+                else:
+                    print("[Caja Negra] ⚠️ S&P 500 devolvió 0 filas. Entrenando IA sin este activo (Fail-safe).")
                     
             except Exception as e:
                 st.warning(f"⚠️ Error obteniendo datos de correlación: {str(e)}")
@@ -442,7 +456,13 @@ class TradingBot:
         
         # Prepare target variable
         df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
+        
+        # Diagnostics before dropping NAs
+        print("\n[Caja Negra] Valores nulos ANTES de dropna() por columna:")
+        print(df.isnull().sum().to_string())
+        
         df_ml = df.dropna().copy()
+        print(f"[Caja Negra] Filas totales SOBREVIVIENTES después de limpieza: {len(df_ml)}")
         
         # Filter features based on availability
         available_features = [feat for feat in self.features if feat in df_ml.columns]
