@@ -105,6 +105,9 @@ class TradingWorker:
             # Train model (if needed)
             model, predictions, df_ml, X_test, X_train, y_train, y_test = self.bot.train_model(df, symbol)
 
+            if model is None:
+                self.logger.warning(f"Could not train model for {symbol} due to insufficient data")
+                return
             
             # Simulate trading
             capital_bot, capital_holding, stop_loss_data = self.bot.simulate_trading(df_ml, X_test, predictions)

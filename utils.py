@@ -409,7 +409,7 @@ class TradingBot:
         
         if not available_features:
             st.error("❌ No hay suficientes características para entrenar el modelo")
-            return None, None, None
+            return None, None, None, None, None, None, None
         
         # Split data
         X = df_ml[available_features]

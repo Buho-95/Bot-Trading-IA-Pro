@@ -134,13 +134,19 @@ with st.spinner("🔄 Descargando datos y ejecutando análisis IA..."):
         # Train model and get predictions
         with st.spinner("🤖 Entrenando modelo de IA..."):
             model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df, simbolo)
-        capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
-        
-        # Save data if auto-save is enabled
-        if auto_save:
-            bot.save_session_data(simbolo, df, capital_bot, capital_holding, predictions)
-        
-        st.session_state.last_update = datetime.now()
+            
+        if model is not None:
+            capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
+            
+            # Save data if auto-save is enabled
+            if auto_save:
+                bot.save_session_data(simbolo, df, capital_bot, capital_holding, predictions)
+            
+            st.session_state.last_update = datetime.now()
+        else:
+            capital_bot = pd.Series()
+            capital_holding = pd.Series()
+            st.warning("⚠️ Datos insuficientes o modelo no disponible.")
     else:
         st.error("No se pudieron obtener los datos del mercado. Por favor, intenta con otro símbolo.")
         st.stop()
