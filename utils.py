@@ -369,8 +369,8 @@ class TradingBot:
                     # Align by date
                     eth_df = eth_df[['date', 'close', 'eth_return']].rename(columns={'close': 'eth_close'})
                     df = pd.merge(df, eth_df, on='date', how='left')
-                    df['eth_close'] = df['eth_close'].ffill()
-                    df['eth_return'] = df['eth_return'].ffill()
+                    df['eth_close'] = df['eth_close'].ffill().bfill()
+                    df['eth_return'] = df['eth_return'].ffill().bfill()
                 
                 # Download S&P 500 data
                 sp500_df = self.get_market_data('^GSPC', 7)
@@ -381,8 +381,8 @@ class TradingBot:
                     # Align by date
                     sp500_df = sp500_df[['date', 'close', 'sp500_return']].rename(columns={'close': 'sp500_close'})
                     df = pd.merge(df, sp500_df, on='date', how='left')
-                    df['sp500_close'] = df['sp500_close'].ffill()
-                    df['sp500_return'] = df['sp500_return'].ffill()
+                    df['sp500_close'] = df['sp500_close'].ffill().bfill()
+                    df['sp500_return'] = df['sp500_return'].ffill().bfill()
                     
             except Exception as e:
                 st.warning(f"⚠️ Error obteniendo datos de correlación: {str(e)}")
@@ -456,6 +456,11 @@ class TradingBot:
         # Split data
         X = df_ml[available_features]
         y = df_ml['target']
+        
+        if len(X) < 10:
+            st.warning("⚠️ Faltan datos para la IA: Historial insuficiente tras limpieza técnica.")
+            return None, None, None, None, None, None, None
+            
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=False)
         
         # Enhanced parameter grid for multi-asset analysis

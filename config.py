@@ -6,7 +6,7 @@ class ConfigManager:
         self.db = db
         self.default_settings = {
             'default_symbol': 'BTC-USD',
-            'default_days': 7,
+            'default_days': 15,
             'risk_level': 'medium',
             'auto_save': 'true',
             'chart_theme': 'dark',
@@ -41,7 +41,7 @@ def init_session_state():
     if 'current_symbol' not in st.session_state:
         st.session_state.current_symbol = 'BTC-USD'
     if 'current_days' not in st.session_state:
-        st.session_state.current_days = 7
+        st.session_state.current_days = 15
     if 'last_update' not in st.session_state:
         st.session_state.last_update = None
     if 'show_history' not in st.session_state:
