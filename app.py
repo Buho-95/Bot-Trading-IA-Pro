@@ -71,7 +71,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Navigation
-page_options = ["Dashboard", "Análisis Técnico", "Historial de Operaciones", "Configuración"]
+page_options = ["Dashboard", "Análisis Técnico", "Análisis de Correlación", "Historial de Operaciones", "Configuración"]
 current_page_index = 0
 if hasattr(st.session_state, 'page') and st.session_state.page in page_options:
     current_page_index = page_options.index(st.session_state.page)
@@ -130,7 +130,10 @@ with st.spinner("🔄 Descargando datos y ejecutando análisis IA..."):
     
     if not df.empty:
         df = bot.calculate_indicators(df)
-        model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df)
+        
+        # Train model and get predictions
+        with st.spinner("🤖 Entrenando modelo de IA..."):
+            model, predictions, df_ml, X_test, X_train, y_train, y_test = bot.train_model(df, simbolo)
         capital_bot, capital_holding, stop_loss_data = bot.simulate_trading(df_ml, X_test, predictions)
         
         # Save data if auto-save is enabled
@@ -343,6 +346,10 @@ elif page == "Análisis Técnico":
             st.markdown(f"{fear_greed_emoji}")
 
 # History Page
+elif page == "Análisis de Correlación":
+    from correlation_analysis import show_correlation_analysis
+    show_correlation_analysis()
+
 elif page == "Historial de Operaciones":
     st.subheader("📜 Historial de Operaciones")
     

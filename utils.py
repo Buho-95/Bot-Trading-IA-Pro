@@ -10,13 +10,159 @@ import requests
 from database import TradingDatabase
 from notifications import TelegramNotifier
 
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def obtener_datos_multiactivo(symbols: List[str], dias: int) -> Dict[str, pd.DataFrame]:
+    """
+    Download data for multiple assets and align them for correlation analysis
+    
+    Args:
+        symbols: List of symbols to download
+        dias: Number of days of historical data
+    
+    Returns:
+        Dictionary with symbol as key and DataFrame as value
+    """
+    data_dict = {}
+    
+    for symbol in symbols:
+        try:
+            # Download data for each symbol
+            df = yf.download(tickers=symbol, period=f"{dias}d", interval="1h", progress=False)
+            df = df.reset_index()
+
+            # Flatten columns if Yahoo sends them in MultiIndex format
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            # Convert all columns to lowercase to avoid errors
+            df.columns = [col.lower() for col in df.columns]
+
+            # Ensure the date column name
+            if 'datetime' in df.columns:
+                df.rename(columns={'datetime': 'date'}, inplace=True)
+
+            # Add symbol prefix to columns to avoid conflicts
+            if not df.empty:
+                prefix = symbol.replace('-', '_').replace('^', '').lower()
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    if col in df.columns:
+                        df.rename(columns={col: f'{prefix}_{col}'}, inplace=True)
+                
+                data_dict[symbol] = df
+                st.success(f"✅ Datos descargados para {symbol}: {len(df)} registros")
+            else:
+                st.warning(f"⚠️ No hay datos disponibles para {symbol}")
+                
+        except Exception as e:
+            st.error(f"❌ Error descargando datos para {symbol}: {str(e)}")
+            continue
+    
+    return data_dict
+
 class TradingBot:
     def __init__(self, db: TradingDatabase):
         self.db = db
         self.model = None
         self.best_params = None
-        self.features = ['open', 'high', 'low', 'close', 'volume', 'rsi_14', 'sma_20', 'sma_50', 'volatilidad', 'retorno', 'atr', 'fear_greed_index']
+        # Enhanced features for multi-asset analysis
+        self.features = [
+            'open', 'high', 'low', 'close', 'volume', 
+            'rsi_14', 'sma_20', 'sma_50', 'volatilidad', 'retorno', 
+            'atr', 'fear_greed_index',
+            # New technical indicators
+            'macd', 'macd_signal', 'macd_histogram',
+            'bb_upper', 'bb_middle', 'bb_lower', 'bb_position',
+            'obv', 'obv_sma',
+            # Multi-asset correlation features
+            'eth_close', 'sp500_close', 'eth_return', 'sp500_return'
+        ]
         self.telegram = TelegramNotifier()
+    
+    def calculate_macd(self, df: pd.DataFrame, price_col: str = 'close') -> pd.DataFrame:
+        """
+        Calculate MACD (Moving Average Convergence Divergence)
+        
+        Args:
+            df: DataFrame with price data
+            price_col: Name of the price column
+        
+        Returns:
+            DataFrame with MACD values added
+        """
+        if df.empty or price_col not in df.columns:
+            return df
+        
+        # Calculate MACD using standard parameters
+        exp1 = df[price_col].ewm(span=12, adjust=False).mean()
+        exp2 = df[price_col].ewm(span=26, adjust=False).mean()
+        
+        df[f'{price_col}_macd'] = exp1 - exp2
+        df[f'{price_col}_macd_signal'] = df[f'{price_col}_macd'].ewm(span=9, adjust=False).mean()
+        df[f'{price_col}_macd_histogram'] = df[f'{price_col}_macd'] - df[f'{price_col}_macd_signal']
+        
+        return df
+    
+    def calculate_bollinger_bands(self, df: pd.DataFrame, price_col: str = 'close', period: int = 20, std_dev: float = 2) -> pd.DataFrame:
+        """
+        Calculate Bollinger Bands
+        
+        Args:
+            df: DataFrame with price data
+            price_col: Name of the price column
+            period: Period for moving average
+            std_dev: Standard deviation multiplier
+        
+        Returns:
+            DataFrame with Bollinger Bands added
+        """
+        if df.empty or price_col not in df.columns:
+            return df
+        
+        # Calculate middle band (SMA)
+        df[f'{price_col}_bb_middle'] = df[price_col].rolling(window=period).mean()
+        
+        # Calculate standard deviation
+        std = df[price_col].rolling(window=period).std()
+        
+        # Calculate upper and lower bands
+        df[f'{price_col}_bb_upper'] = df[f'{price_col}_bb_middle'] + (std * std_dev)
+        df[f'{price_col}_bb_lower'] = df[f'{price_col}_bb_middle'] - (std * std_dev)
+        
+        # Calculate bandwidth and position
+        df[f'{price_col}_bb_width'] = df[f'{price_col}_bb_upper'] - df[f'{price_col}_bb_lower']
+        df[f'{price_col}_bb_position'] = (df[price_col] - df[f'{price_col}_bb_lower']) / df[f'{price_col}_bb_width']
+        
+        return df
+    
+    def calculate_obv(self, df: pd.DataFrame, price_col: str = 'close', volume_col: str = 'volume') -> pd.DataFrame:
+        """
+        Calculate On-Balance Volume (OBV)
+        
+        Args:
+            df: DataFrame with price and volume data
+            price_col: Name of the price column
+            volume_col: Name of the volume column
+        
+        Returns:
+            DataFrame with OBV added
+        """
+        if df.empty or price_col not in df.columns or volume_col not in df.columns:
+            return df
+        
+        # Calculate OBV
+        obv = [0]
+        for i in range(1, len(df)):
+            if df[price_col].iloc[i] > df[price_col].iloc[i-1]:
+                obv.append(obv[-1] + df[volume_col].iloc[i])
+            elif df[price_col].iloc[i] < df[price_col].iloc[i-1]:
+                obv.append(obv[-1] - df[volume_col].iloc[i])
+            else:
+                obv.append(obv[-1])
+        
+        df[f'{price_col}_obv'] = obv
+        df[f'{price_col}_obv_sma'] = pd.Series(obv).rolling(window=10).mean()
+        
+        return df
     
     def calculate_kelly_criterion(self, win_rate: float, avg_win: float, avg_loss: float) -> Dict[str, float]:
         """
@@ -149,22 +295,60 @@ class TradingBot:
             'atr_percentage': (current_atr / current_price) * 100
         }
     
-    def get_fear_greed_index(self) -> int:
-        """Get Fear & Greed Index from Alternative.me API"""
-        try:
-            response = requests.get('https://api.alternative.me/fng/', timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            return int(data['data'][0]['value'])
-        except Exception as e:
-            st.warning(f"No se pudo obtener Fear & Greed Index: {str(e)}")
-            return 50  # Neutral value as fallback
     
-    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators including ATR and Fear & Greed"""
+    def calculate_indicators(self, df: pd.DataFrame, symbol: str = 'BTC-USD') -> pd.DataFrame:
+        """
+        Calculate technical indicators including ATR, MACD, Bollinger Bands, OBV and Fear & Greed
+        Enhanced for multi-asset correlation analysis
+        """
         if df.empty:
             return df
         
+        # Standard indicators
+        df = self.calculate_standard_indicators(df)
+        
+        # New technical indicators
+        df = self.calculate_macd(df, 'close')
+        df = self.calculate_bollinger_bands(df, 'close')
+        df = self.calculate_obv(df, 'close', 'volume')
+        
+        # Add correlation features if multi-asset
+        if symbol == 'BTC-USD':
+            # Try to get ETH and S&P 500 data for correlation
+            try:
+                # Download ETH data
+                eth_df = yf.download(tickers='ETH-USD', period="30d", interval="1h", progress=False)
+                if not eth_df.empty:
+                    eth_df = eth_df.reset_index()
+                    if isinstance(eth_df.columns, pd.MultiIndex):
+                        eth_df.columns = eth_df.columns.get_level_values(0)
+                    eth_df.columns = [col.lower() for col in eth_df.columns]
+                    eth_df['eth_return'] = eth_df['close'].pct_change()
+                    
+                    # Align with BTC data
+                    df['eth_close'] = eth_df['close'].reindex(df.index, method='ffill')
+                    df['eth_return'] = eth_df['eth_return'].reindex(df.index, method='ffill')
+                
+                # Download S&P 500 data
+                sp500_df = yf.download(tickers='^GSPC', period="30d", interval="1h", progress=False)
+                if not sp500_df.empty:
+                    sp500_df = sp500_df.reset_index()
+                    if isinstance(sp500_df.columns, pd.MultiIndex):
+                        sp500_df.columns = sp500_df.columns.get_level_values(0)
+                    sp500_df.columns = [col.lower() for col in sp500_df.columns]
+                    sp500_df['sp500_return'] = sp500_df['close'].pct_change()
+                    
+                    # Align with BTC data
+                    df['sp500_close'] = sp500_df['close'].reindex(df.index, method='ffill')
+                    df['sp500_return'] = sp500_df['sp500_return'].reindex(df.index, method='ffill')
+                    
+            except Exception as e:
+                st.warning(f"⚠️ Error obteniendo datos de correlación: {str(e)}")
+        
+        return df
+    
+    def calculate_standard_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculate standard technical indicators"""
         # RSI calculation
         delta = df['close'].diff()
         gain = delta.clip(lower=0)
@@ -190,8 +374,28 @@ class TradingBot:
         
         return df
     
-    def train_model(self, df: pd.DataFrame) -> Tuple[object, np.ndarray, pd.DataFrame]:
-        """Train the Random Forest model with GridSearchCV optimization"""
+    def simulate_trading(self, df_ml: pd.DataFrame, X_test: pd.DataFrame, predictions: np.ndarray) -> Tuple[pd.Series, pd.Series, Dict]:
+        """Simulate trading strategy with trailing stop loss"""
+        # Calculate returns
+        retornos_reales = df_ml.loc[X_test.index, 'retorno'].shift(-1).fillna(0)
+        
+        # Apply trailing stop loss logic
+        stop_loss_data = self.calculate_trailing_stop_loss(df_ml, predictions)
+        adjusted_returns = self.apply_trailing_stop_logic(retornos_reales, predictions, stop_loss_data)
+        
+        retornos_bot = predictions * adjusted_returns
+        
+        # Calculate capital evolution
+        initial_capital = 1000
+        capital_bot = initial_capital * (1 + retornos_bot).cumprod()
+        capital_holding = initial_capital * (1 + retornos_reales).cumprod()
+        
+        return capital_bot, capital_holding, stop_loss_data
+
+
+
+    def train_model(self, df: pd.DataFrame, symbol: str = 'BTC-USD') -> Tuple[object, np.ndarray, pd.DataFrame]:
+        """Train Random Forest model with GridSearchCV optimization for enhanced features"""
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split, GridSearchCV
         from sklearn.metrics import accuracy_score, classification_report
@@ -199,30 +403,39 @@ class TradingBot:
         # Prepare target variable
         df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
         df_ml = df.dropna().copy()
-
+        
+        # Filter features based on availability
+        available_features = [feat for feat in self.features if feat in df_ml.columns]
+        
+        if not available_features:
+            st.error("❌ No hay suficientes características para entrenar el modelo")
+            return None, None, None
+        
         # Split data
-        X = df_ml[self.features]
+        X = df_ml[available_features]
         y = df_ml['target']
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=False)
-
-        # GridSearchCV for hyperparameter optimization
+        
+        # Enhanced parameter grid for multi-asset analysis
         param_grid = {
-            'n_estimators': [50, 100, 200],
-            'max_depth': [5, 7, 10, None],
+            'n_estimators': [100, 200, 300],  # More trees for complex patterns
+            'max_depth': [10, 15, 20, None],  # Deeper trees
             'min_samples_split': [2, 5, 10],
             'min_samples_leaf': [1, 2, 4],
-            'max_features': ['sqrt', 'log2', None]
+            'max_features': ['sqrt', 'log2', 0.7, None],  # Include float for percentage
+            'bootstrap': [True, False],  # Bootstrap sampling
+            'class_weight': ['balanced', None]  # Handle class imbalance
         }
         
         # Create base model
-        rf = RandomForestClassifier(random_state=42)
+        rf = RandomForestClassifier(random_state=42, n_jobs=-1)
         
-        # Perform GridSearchCV
-        with st.spinner('🔍 Optimizando parámetros del modelo con GridSearchCV...'):
+        # Perform GridSearchCV with enhanced configuration
+        with st.spinner('🔍 Optimizando parámetros del modelo con GridSearchCV para análisis multi-activo...'):
             grid_search = GridSearchCV(
                 estimator=rf,
                 param_grid=param_grid,
-                cv=3,
+                cv=5,  # Increased cross-validation folds
                 n_jobs=-1,
                 scoring='accuracy',
                 verbose=0
@@ -241,43 +454,38 @@ class TradingBot:
             # Store results in session state
             st.session_state.model_accuracy = accuracy
             st.session_state.best_params = self.best_params
+            st.session_state.features_used = available_features
             
-            st.success(f"✅ Modelo optimizado con {accuracy:.2%} de precisión")
+            st.success(f"✅ Modelo optimizado con {accuracy:.2%} de precisión usando {len(available_features)} características")
+            
+            # Feature importance analysis
+            if hasattr(self.model, 'feature_importances_'):
+                feature_importance = pd.DataFrame({
+                    'feature': available_features,
+                    'importance': self.model.feature_importances_
+                }).sort_values('importance', ascending=False)
+                
+                st.subheader("🎯 Importancia de Características")
+                st.dataframe(feature_importance, use_container_width=True)
             
             # Send Telegram notification for model retraining
             if self.telegram.enabled:
                 retraining_data = {
-                    'symbol': st.session_state.get('current_symbol', 'BTC-USD'),
+                    'symbol': symbol,
                     'accuracy': accuracy,
                     'best_params': self.best_params,
                     'duration': 'Unknown',
                     'data_points': len(X_train),
                     'cv_score': accuracy,
                     'previous_accuracy': st.session_state.get('previous_accuracy', 0),
-                    'improvement': accuracy - st.session_state.get('previous_accuracy', 0)
+                    'improvement': accuracy - st.session_state.get('previous_accuracy', 0),
+                    'features_count': len(available_features)
                 }
                 self.telegram.send_model_retraining_notification(retraining_data)
         
         return self.model, predictions, df_ml, X_test, X_train, y_train, y_test
     
-    def simulate_trading(self, df_ml: pd.DataFrame, X_test: pd.DataFrame, predictions: np.ndarray) -> Tuple[pd.Series, pd.Series, Dict]:
-        """Simulate trading strategy with trailing stop loss"""
-        # Calculate returns
-        retornos_reales = df_ml.loc[X_test.index, 'retorno'].shift(-1).fillna(0)
-        
-        # Apply trailing stop loss logic
-        stop_loss_data = self.calculate_trailing_stop_loss(df_ml, predictions)
-        adjusted_returns = self.apply_trailing_stop_logic(retornos_reales, predictions, stop_loss_data)
-        
-        retornos_bot = predictions * adjusted_returns
-        
-        # Calculate capital evolution
-        initial_capital = 1000
-        capital_bot = initial_capital * (1 + retornos_bot).cumprod()
-        capital_holding = initial_capital * (1 + retornos_reales).cumprod()
-        
-        return capital_bot, capital_holding, stop_loss_data
-    
+
     def apply_trailing_stop_logic(self, returns: pd.Series, predictions: np.ndarray, stop_data: Dict) -> pd.Series:
         """Apply trailing stop loss logic to returns"""
         adjusted_returns = returns.copy()

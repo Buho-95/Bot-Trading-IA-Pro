@@ -52,9 +52,13 @@ def init_session_state():
 def get_available_symbols():
     """Get list of available trading symbols"""
     return [
-        "BTC-USD", "ETH-USD", "SOL-USD",  # Cryptocurrencies
-        "AAPL", "GOOGL", "MSFT", "AMZN",  # Tech stocks
-        "TSLA", "META", "NVDA", "AMD"     # More tech stocks
+        # Cryptocurrencies (Primary focus)
+        "BTC-USD", "ETH-USD", "SOL-USD",
+        # Stock Indices
+        "^GSPC",  # S&P 500
+        # Major Tech Stocks
+        "AAPL", "GOOGL", "MSFT", "AMZN",
+        "TSLA", "META", "NVDA", "AMD",
     ]
 
 def get_risk_levels():

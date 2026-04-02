@@ -272,12 +272,13 @@ class TradingDatabase:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 DELETE FROM market_data 
-                WHERE timestamp < datetime('now', '-{} days')
-            """.format(days_to_keep))
+                WHERE timestamp < datetime('now', '-' || ? || ' days')
+            """, (str(days_to_keep),))
             
             conn.execute("""
                 DELETE FROM trading_operations 
-                WHERE timestamp < datetime('now', '-{} days')
-            """.format(days_to_keep * 2))  # Keep operations longer
+                WHERE timestamp < datetime('now', '-' || ? || ' days')
+            """, (str(days_to_keep * 2),))  # Keep operations longer
             
             conn.commit()
+

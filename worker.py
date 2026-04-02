@@ -103,7 +103,8 @@ class TradingWorker:
             df = self.bot.calculate_indicators(df)
             
             # Train model (if needed)
-            model, predictions, df_ml, X_test, X_train, y_train, y_test = self.bot.train_model(df)
+            model, predictions, df_ml, X_test, X_train, y_train, y_test = self.bot.train_model(df, symbol)
+
             
             # Simulate trading
             capital_bot, capital_holding, stop_loss_data = self.bot.simulate_trading(df_ml, X_test, predictions)
