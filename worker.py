@@ -92,7 +92,7 @@ class TradingWorker:
             logger.info(f"📊 Processing {symbol}...")
             
             # Get market data
-            days = int(self.config.get_setting('default_days', '15'))
+            days = int(self.config.get_setting('default_days', '30'))
             df = self.bot.get_market_data(symbol, days)
             
             if df.empty:
