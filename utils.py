@@ -380,7 +380,7 @@ class TradingBot:
                     # Align by date
                     sp500_df = sp500_df[['date', 'close', 'sp500_return']].rename(columns={'close': 'sp500_close'})
                     df = pd.merge(df, sp500_df, on='date', how='left')
-                    df = df.fillna(method='ffill')
+                    df = df.ffill()
                     
             except Exception as e:
                 st.warning(f"⚠️ Error obteniendo datos de correlación: {str(e)}")
@@ -456,7 +456,11 @@ class TradingBot:
         y = df_ml['target']
         
         if len(X) < 100:
-            st.warning(f"⚠️ Faltan datos para la IA: solo {len(X)} registros disponibles tras limpieza (se requieren >100).")
+            error_msg = f"ERROR CRÍTICO: Faltan datos para la IA. Solo hay {len(X)} registros disponibles tras la limpieza (se requieren mínimo 100). Abortando entrenamiento."
+            print("\n" + "="*50)
+            print(error_msg)
+            print("="*50 + "\n")
+            st.warning(f"⚠️ {error_msg}")
             return None, None, None, None, None, None, None
             
         st.success(f"🤖 IA lista para entrenar con {len(X)} registros.")
