@@ -66,14 +66,14 @@ def _cached_train_model(X_train: pd.DataFrame, y_train: pd.Series, param_grid: d
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import RandomizedSearchCV
     
-    rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+    rf = RandomForestClassifier(random_state=42, n_jobs=None)
     
     search = RandomizedSearchCV(
         estimator=rf,
         param_distributions=param_grid,
         n_iter=10,
         cv=5,
-        n_jobs=-1,
+        n_jobs=None,
         scoring='accuracy',
         random_state=42,
         verbose=0
@@ -84,18 +84,22 @@ def _cached_train_model(X_train: pd.DataFrame, y_train: pd.Series, param_grid: d
         return search.best_estimator_, search.best_params_
         
     try:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(_do_train)
-            best_model, best_params = future.result(timeout=30)
-            return best_model, best_params
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(_do_train)
+        best_model, best_params = future.result(timeout=30)
+        executor.shutdown(wait=False)
+        return best_model, best_params
     except concurrent.futures.TimeoutError:
+        executor.shutdown(wait=False)
         st.warning("⏱️ El entrenamiento optimizado superó los 30 segundos. Usando parámetros por defecto para no bloquear la app.")
-        default_rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+        default_rf = RandomForestClassifier(random_state=42, n_jobs=None)
         default_rf.fit(X_train, y_train)
         return default_rf, "Parámetros Por Defecto (Timeout Previsto)"
     except Exception as e:
+        if 'executor' in locals():
+            executor.shutdown(wait=False)
         st.error(f"❌ Error durante el entrenamiento: {e}")
-        default_rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+        default_rf = RandomForestClassifier(random_state=42, n_jobs=None)
         default_rf.fit(X_train, y_train)
         return default_rf, f"Parámetros Por Defecto (Recuperado de Error)"
 
@@ -357,30 +361,28 @@ class TradingBot:
             # Try to get ETH and S&P 500 data for correlation
             try:
                 # Download ETH data
-                eth_df = yf.download(tickers='ETH-USD', period="30d", interval="1h", progress=False)
+                eth_df = self.get_market_data('ETH-USD', 30)
                 if not eth_df.empty:
-                    eth_df = eth_df.reset_index()
-                    if isinstance(eth_df.columns, pd.MultiIndex):
-                        eth_df.columns = eth_df.columns.get_level_values(0)
-                    eth_df.columns = [col.lower() for col in eth_df.columns]
+                    eth_df = eth_df.copy()
                     eth_df['eth_return'] = eth_df['close'].pct_change()
                     
-                    # Align with BTC data
-                    df['eth_close'] = eth_df['close'].reindex(df.index, method='ffill')
-                    df['eth_return'] = eth_df['eth_return'].reindex(df.index, method='ffill')
+                    # Align by date
+                    eth_df = eth_df[['date', 'close', 'eth_return']].rename(columns={'close': 'eth_close'})
+                    df = pd.merge(df, eth_df, on='date', how='left')
+                    df['eth_close'] = df['eth_close'].ffill()
+                    df['eth_return'] = df['eth_return'].ffill()
                 
                 # Download S&P 500 data
-                sp500_df = yf.download(tickers='^GSPC', period="30d", interval="1h", progress=False)
+                sp500_df = self.get_market_data('^GSPC', 30)
                 if not sp500_df.empty:
-                    sp500_df = sp500_df.reset_index()
-                    if isinstance(sp500_df.columns, pd.MultiIndex):
-                        sp500_df.columns = sp500_df.columns.get_level_values(0)
-                    sp500_df.columns = [col.lower() for col in sp500_df.columns]
+                    sp500_df = sp500_df.copy()
                     sp500_df['sp500_return'] = sp500_df['close'].pct_change()
                     
-                    # Align with BTC data
-                    df['sp500_close'] = sp500_df['close'].reindex(df.index, method='ffill')
-                    df['sp500_return'] = sp500_df['sp500_return'].reindex(df.index, method='ffill')
+                    # Align by date
+                    sp500_df = sp500_df[['date', 'close', 'sp500_return']].rename(columns={'close': 'sp500_close'})
+                    df = pd.merge(df, sp500_df, on='date', how='left')
+                    df['sp500_close'] = df['sp500_close'].ffill()
+                    df['sp500_return'] = df['sp500_return'].ffill()
                     
             except Exception as e:
                 st.warning(f"⚠️ Error obteniendo datos de correlación: {str(e)}")
